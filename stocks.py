@@ -1,3 +1,4 @@
+import time
 import urllib2
 try:
     from bs4 import BeautifulSoup 
@@ -8,16 +9,27 @@ import sys
 
 #python stocks.py 2017-Oct-24 > Oct24.log
 # ex 2017-Oct-23
-targetDate=sys.argv[1]
+#if len(sys.argv) > 1:
+#   targetDate=sys.argv[1]
+#else:
+#    now = datetime.datetime.now()
+
+
 columSeparator = ' | '
 Length = 15
 TotalWidth = 33
 Breaker =  "|"+"- " * TotalWidth + " |"
 
+
 class WSJ:
     def ratingFromWsj(self, symbol):
         url = 'http://quotes.wsj.com/' + symbol + '/research-ratings'
-        page = urllib2.urlopen(url)
+        #print url
+        try:
+            page = urllib2.urlopen(url)
+        except urllib2.HTTPError:
+            print '500 ImportError for symbol: ' + symbol
+            return 'NA', '', ''
         soup = BeautifulSoup(page, "html.parser")
         analystRatingTable = soup.findAll('table', {"class":"cr_dataTable"})
         if len(analystRatingTable) < 6:
@@ -41,7 +53,7 @@ class WSJ:
         r = overAllRating[3].findAll('div', {'class': "numValue-content"})[0].text.strip()
         summary = numberOfBuy[0].text.strip()+"-"+ numberOfOverweight[0].text.strip()+"-"+ numberOfHold[0].text.strip()+"-"+ numberOfUnderWeight[0].text.strip()+"-"+ numberOfSell[0].text.strip()
         totalNumberOfRating = int(numberOfBuy[0].text.strip()) + int(numberOfOverweight[0].text.strip()) + int(numberOfHold[0].text.strip()) + int(numberOfUnderWeight[0].text.strip()) + int(numberOfSell[0].text.strip())
-        if (r == 'Overweight' or r == 'Buy' or r == 'Hold'):
+        if (r == 'Overweight' or r == 'Buy' or r == 'Hold' or r == 'Underweight'):
             return r, summary, totalNumberOfRating
         return 'NA', summary, totalNumberOfRating
 
@@ -54,7 +66,7 @@ class Zacks:
         elements = soup.findAll('section', {"id":"premium_research"})
         researchRating = soup.findAll('div', {'class': 'callout_box3 pad10'})
         if len(researchRating) == 0:
-            print 'Rating not found for stock ' + symbol
+            #print 'Rating not found for stock ' + symbol
             return 'NA'
         row =  researchRating[0].find_all('tr')
         if len(row) == 0:
@@ -62,12 +74,12 @@ class Zacks:
             return 'NA'
         column = row[0].find_all('td')[0]
         rating = column.get_text().strip()
-        if rating == 'Strong Buy 1' or rating == 'Buy 2' or rating == 'Hold 3':
+        if rating == 'Strong Buy 1' or rating == 'Buy 2' or rating == 'Hold 3' or rating == 'Sell 4':
             return rating
         return 'NA' 
 
 class Nasdaq:
-    def findAllSymbol(self):
+    def findAllSymbol(self, targetDate):
         url = 'http://www.nasdaq.com/earnings/earnings-calendar.aspx?date=' + targetDate
         page = urllib2.urlopen(url)
         soup = BeautifulSoup(page, "html.parser")
@@ -79,27 +91,29 @@ class Nasdaq:
             myList.append(ref.split("/")[-2].upper())
         return myList
 
-nasdaq = Nasdaq()
-oneDayList = nasdaq.findAllSymbol()
-print len(oneDayList)
-#oneDayList = ['FANG', 'COHR', 'RSPP']
-zacks = Zacks()
-wsj = WSJ()
+def enrtypoint(targetDate): 
+    nasdaq = Nasdaq()
+    oneDayList = nasdaq.findAllSymbol(targetDate)
+    print targetDate + ":" + "number of stocks:" + str(len(oneDayList))
+    #oneDayList = ['FANG', 'COHR', 'RSPP']
+    zacks = Zacks()
+    wsj = WSJ()
 
-print Breaker
-print columSeparator.join(['|Symbol'.ljust(Length),'Zacks'.ljust(Length), 'WSJ'.ljust(Length), 'WSJ All Rating'.ljust(Length-1) + "|"])
-print Breaker
-for item in oneDayList:
-    singleList = list()
-    zRating = zacks.ratingFromZacks(item)
-    if zRating != 'NA':
-        wsjRating,summary, totalNumberOfRating = wsj.ratingFromWsj(item)
-        bothHold = (wsjRating == 'Hold' and zRating == 'Hold 3')
-        noneHold = (wsjRating != 'Hold' and zRating != 'Hold 3')
-        if wsjRating != 'NA' and totalNumberOfRating > 5 and bothHold == False:
-            singleList.append("|" + item.ljust(Length-1))
-            singleList.append(zRating.encode('ascii','ignore').ljust(Length))
-            singleList.append(wsjRating.encode('ascii','ignore').ljust(Length))
-            singleList.append(summary.encode('ascii','ignore').ljust(Length-1)+ "|")
-            print columSeparator.join(singleList)
-            print Breaker
+    print Breaker
+    print columSeparator.join(['|Symbol'.ljust(Length),'Zacks'.ljust(Length), 'WSJ'.ljust(Length), 'WSJ All Rating'.ljust(Length-1) + "|"])
+    print Breaker
+    for item in oneDayList:
+        singleList = list()
+        zRating = zacks.ratingFromZacks(item)
+        if zRating != 'NA':
+            #time.sleep(1)
+            wsjRating,summary, totalNumberOfRating = wsj.ratingFromWsj(item)
+            bothHold = (wsjRating == 'Hold' and zRating == 'Hold 3')
+            noneHold = (wsjRating != 'Hold' and zRating != 'Hold 3')
+            if wsjRating != 'NA' and totalNumberOfRating > 12 and bothHold == False:
+                singleList.append("|" + item.ljust(Length-1))
+                singleList.append(zRating.encode('ascii','ignore').ljust(Length))
+                singleList.append(wsjRating.encode('ascii','ignore').ljust(Length))
+                singleList.append(summary.encode('ascii','ignore').ljust(Length-1)+ "|")
+                print columSeparator.join(singleList)
+                print Breaker
